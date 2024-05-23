@@ -13,31 +13,35 @@ import { tapResponse } from '@ngrx/operators';
 import {
   patchState,
   signalStore,
+  type,
   withComputed,
   withHooks,
   withMethods,
   withState,
 } from '@ngrx/signals';
+import { setAllEntities, withEntities } from '@ngrx/signals/entities';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { pipe, tap, exhaustMap, filter } from 'rxjs';
 
 export type AlbumSearchState = {
   query: string;
   order: SortOrder;
-  albums: Album[];
 };
 
 export const albumSearchStore = signalStore(
   withState<AlbumSearchState>({
     query: '',
     order: 'asc',
-    albums: [],
+  }),
+  withEntities({
+    collection: 'album',
+    entity: type<Album>(),
   }),
   withRequestStatus(),
   withComputed((state) => {
     const filteredAlbums = computed(() => {
       return sortAlbums(
-        searchAlbums(state.albums(), state.query()),
+        searchAlbums(state.albumEntities(), state.query()),
         state.order(),
       );
     });
@@ -47,7 +51,7 @@ export const albumSearchStore = signalStore(
     });
 
     const showSpinner = computed(() => {
-      return state.isPending() && state.albums().length === 0;
+      return state.isPending() && state.albumEntities().length === 0;
     });
 
     return {
@@ -75,7 +79,15 @@ export const albumSearchStore = signalStore(
           exhaustMap(() => {
             return albumService.getAll().pipe(
               tapResponse({
-                next: (albums) => patchState(store, { albums }, setFulfilled()),
+                next: (albums) => {
+                  // Two Patch states work fine and have no unwanted sideeffects / pitfalls
+                  // Can setAllEntities and another setFullfilled be combined?
+                  patchState(
+                    store,
+                    setAllEntities(albums, { collection: 'album' }),
+                  );
+                  patchState(store, setFulfilled());
+                },
                 error: (error: Error) => {
                   patchState(store, setError(error.message));
                 },
