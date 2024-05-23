@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  Inject,
   OnInit,
   computed,
   inject,
@@ -11,7 +12,11 @@ import { Album, searchAlbums, sortAlbums } from '@/albums/album.model';
 import { AlbumFilterComponent } from './album-filter/album-filter.component';
 import { AlbumListComponent } from './album-list/album-list.component';
 import { patchState, signalState } from '@ngrx/signals';
+import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { AlbumsService } from '@/albums/albums.service';
+import { EMPTY, catchError, exhaustMap, map } from 'rxjs';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { tapResponse } from '@ngrx/operators';
 
 @Component({
   selector: 'ngrx-album-search',
@@ -41,6 +46,8 @@ import { AlbumsService } from '@/albums/albums.service';
 export default class AlbumSearchComponent implements OnInit {
   private readonly albumService = inject(AlbumsService);
 
+  private readonly snackbar = inject(MatSnackBar);
+
   state = signalState<{
     query: string;
     order: SortOrder;
@@ -68,10 +75,20 @@ export default class AlbumSearchComponent implements OnInit {
     return this.state.showProgress() && this.state.albums().length === 0;
   });
 
+  loadAllAlbums = rxMethod<void>(
+    exhaustMap(() => {
+      return this.albumService.getAll().pipe(
+        tapResponse({
+          next: (albums) => patchState(this.state, { albums }),
+          error: (error: Error) =>
+            this.snackbar.open(error.message, 'close', { duration: 5_000 }),
+        }),
+      );
+    }),
+  );
+
   ngOnInit(): void {
-    this.albumService
-      .getAll()
-      .subscribe((albums) => patchState(this.state, { albums }));
+    this.loadAllAlbums();
   }
 
   updateQuery(query: string): void {
