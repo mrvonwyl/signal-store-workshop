@@ -14,7 +14,7 @@ import { AlbumListComponent } from './album-list/album-list.component';
 import { patchState, signalState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { AlbumsService } from '@/albums/albums.service';
-import { EMPTY, catchError, exhaustMap, map } from 'rxjs';
+import { EMPTY, catchError, exhaustMap, map, pipe, tap } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { tapResponse } from '@ngrx/operators';
 
@@ -51,7 +51,7 @@ export default class AlbumSearchComponent implements OnInit {
   state = signalState<{
     query: string;
     order: SortOrder;
-    showProgress: false;
+    showProgress: boolean;
     albums: Album[];
   }>({
     query: '',
@@ -76,15 +76,21 @@ export default class AlbumSearchComponent implements OnInit {
   });
 
   loadAllAlbums = rxMethod<void>(
-    exhaustMap(() => {
-      return this.albumService.getAll().pipe(
-        tapResponse({
-          next: (albums) => patchState(this.state, { albums }),
-          error: (error: Error) =>
-            this.snackbar.open(error.message, 'close', { duration: 5_000 }),
-        }),
-      );
-    }),
+    pipe(
+      tap(() => {
+        patchState(this.state, { showProgress: true });
+      }),
+      exhaustMap(() => {
+        return this.albumService.getAll().pipe(
+          tapResponse({
+            next: (albums) =>
+              patchState(this.state, { albums, showProgress: false }),
+            error: (error: Error) =>
+              this.snackbar.open(error.message, 'close', { duration: 5_000 }),
+          }),
+        );
+      }),
+    ),
   );
 
   ngOnInit(): void {
