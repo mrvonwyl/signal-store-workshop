@@ -17,91 +17,41 @@ import { AlbumsService } from '@/albums/albums.service';
 import { EMPTY, catchError, exhaustMap, map, pipe, tap } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { tapResponse } from '@ngrx/operators';
+import { albumSearchStore } from '@/albums/album-search/album-search.store';
+
+type AlbumSearchState = {
+  query: string;
+  order: SortOrder;
+  showProgress: boolean;
+  albums: Album[];
+};
 
 @Component({
   selector: 'ngrx-album-search',
   standalone: true,
   imports: [ProgressBarComponent, AlbumFilterComponent, AlbumListComponent],
   template: `
-    <ngrx-progress-bar [showProgress]="state.showProgress()" />
+    <ngrx-progress-bar [showProgress]="store.showProgress()" />
 
     <div class="container">
-      <h1>Albums ({{ totalAlbums() }})</h1>
+      <h1>Albums ({{ store.totalAlbums() }})</h1>
 
       <ngrx-album-filter
-        [query]="state.query()"
-        [order]="state.order()"
-        (queryChange)="updateQuery($event)"
-        (orderChange)="updateOrder($event)"
+        [query]="store.query()"
+        [order]="store.order()"
+        (queryChange)="store.updateQuery($event)"
+        (orderChange)="store.updateOrder($event)"
       />
 
       <ngrx-album-list
-        [albums]="filteresAlbums()"
-        [showSpinner]="showSpinner()"
+        [albums]="store.filteredAlbums()"
+        [showSpinner]="store.showSpinner()"
       />
     </div>
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
+  providers: [albumSearchStore],
 })
-export default class AlbumSearchComponent implements OnInit {
-  private readonly albumService = inject(AlbumsService);
-
-  private readonly snackbar = inject(MatSnackBar);
-
-  state = signalState<{
-    query: string;
-    order: SortOrder;
-    showProgress: boolean;
-    albums: Album[];
-  }>({
-    query: '',
-    order: 'asc',
-    showProgress: false,
-    albums: [],
-  });
-
-  filteresAlbums = computed(() => {
-    return sortAlbums(
-      searchAlbums(this.state.albums(), this.state.query()),
-      this.state.order(),
-    );
-  });
-
-  totalAlbums = computed(() => {
-    return this.filteresAlbums().length;
-  });
-
-  showSpinner = computed(() => {
-    return this.state.showProgress() && this.state.albums().length === 0;
-  });
-
-  loadAllAlbums = rxMethod<void>(
-    pipe(
-      tap(() => {
-        patchState(this.state, { showProgress: true });
-      }),
-      exhaustMap(() => {
-        return this.albumService.getAll().pipe(
-          tapResponse({
-            next: (albums) =>
-              patchState(this.state, { albums, showProgress: false }),
-            error: (error: Error) =>
-              this.snackbar.open(error.message, 'close', { duration: 5_000 }),
-          }),
-        );
-      }),
-    ),
-  );
-
-  ngOnInit(): void {
-    this.loadAllAlbums();
-  }
-
-  updateQuery(query: string): void {
-    patchState(this.state, { query });
-  }
-
-  updateOrder(order: SortOrder): void {
-    patchState(this.state, { order });
-  }
+export default class AlbumSearchComponent {
+  readonly store = inject(albumSearchStore);
 }
