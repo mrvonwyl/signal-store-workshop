@@ -31,7 +31,7 @@ type AlbumSearchState = {
   standalone: true,
   imports: [ProgressBarComponent, AlbumFilterComponent, AlbumListComponent],
   template: `
-    <ngrx-progress-bar [showProgress]="store.showProgress()" />
+    <ngrx-progress-bar [showProgress]="store.isPending()" />
 
     <div class="container">
       <h1>Albums ({{ store.totalAlbums() }})</h1>

@@ -1,6 +1,12 @@
 import { Album, searchAlbums, sortAlbums } from '@/albums/album.model';
 import { AlbumsService } from '@/albums/albums.service';
 import { SortOrder } from '@/shared/models/sort-order.model';
+import {
+  withRequestStatus,
+  setPending,
+  setFulfilled,
+  setError,
+} from '@/shared/state/route/request-status.feature';
 import { computed, inject } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { tapResponse } from '@ngrx/operators';
@@ -18,7 +24,6 @@ import { pipe, tap, exhaustMap } from 'rxjs';
 export type AlbumSearchState = {
   query: string;
   order: SortOrder;
-  showProgress: boolean;
   albums: Album[];
 };
 
@@ -26,9 +31,9 @@ export const albumSearchStore = signalStore(
   withState<AlbumSearchState>({
     query: '',
     order: 'asc',
-    showProgress: false,
     albums: [],
   }),
+  withRequestStatus(),
   withComputed((state) => {
     const filteredAlbums = computed(() => {
       return sortAlbums(
@@ -42,7 +47,7 @@ export const albumSearchStore = signalStore(
     });
 
     const showSpinner = computed(() => {
-      return state.showProgress() && state.albums().length === 0;
+      return state.isPending() && state.albums().length === 0;
     });
 
     return {
@@ -65,15 +70,17 @@ export const albumSearchStore = signalStore(
       loadAllAlbums: rxMethod<void>(
         pipe(
           tap(() => {
-            patchState(store, { showProgress: true });
+            patchState(store, setPending());
           }),
           exhaustMap(() => {
             return albumService.getAll().pipe(
               tapResponse({
-                next: (albums) =>
-                  patchState(store, { albums, showProgress: false }),
-                error: (error: Error) =>
-                  snackbar.open(error.message, 'close', { duration: 5_000 }),
+                next: (albums) => patchState(store, { albums }, setFulfilled()),
+                error: (error: Error) => {
+                  patchState(store, setError(error));
+
+                  snackbar.open(error.message, 'close', { duration: 5_000 });
+                },
               }),
             );
           }),
