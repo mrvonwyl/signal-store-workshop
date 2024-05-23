@@ -31,6 +31,6 @@ export function setFulfilled(): RequestStatusState {
   return { requestStatus: 'fulfilled' };
 }
 
-export function setError(error: Error): RequestStatusState {
-  return { requestStatus: { error: error.message } };
+export function setError(error: string): RequestStatusState {
+  return { requestStatus: { error } };
 }

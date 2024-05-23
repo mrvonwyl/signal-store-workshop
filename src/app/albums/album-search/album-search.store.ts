@@ -19,7 +19,7 @@ import {
   withState,
 } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
-import { pipe, tap, exhaustMap } from 'rxjs';
+import { pipe, tap, exhaustMap, filter } from 'rxjs';
 
 export type AlbumSearchState = {
   query: string;
@@ -77,20 +77,27 @@ export const albumSearchStore = signalStore(
               tapResponse({
                 next: (albums) => patchState(store, { albums }, setFulfilled()),
                 error: (error: Error) => {
-                  patchState(store, setError(error));
-
-                  snackbar.open(error.message, 'close', { duration: 5_000 });
+                  patchState(store, setError(error.message));
                 },
               }),
             );
           }),
         ),
       ),
+      notifyOnError: rxMethod<string | null>(
+        pipe(
+          filter(Boolean),
+          tap((error) => {
+            snackbar.open(error, 'close', { duration: 5_000 });
+          }),
+        ),
+      ),
     };
   }),
-  withHooks(({ loadAllAlbums }) => ({
+  withHooks(({ loadAllAlbums, notifyOnError, error }) => ({
     onInit() {
       loadAllAlbums();
+      notifyOnError(error);
     },
   })),
 );
