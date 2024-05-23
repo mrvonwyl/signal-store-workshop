@@ -1,58 +1,84 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+} from '@angular/core';
 import { ProgressBarComponent } from '@/shared/ui/progress-bar.component';
 import { SortOrder } from '@/shared/models/sort-order.model';
-import { Album } from '@/albums/album.model';
+import { Album, searchAlbums, sortAlbums } from '@/albums/album.model';
 import { AlbumFilterComponent } from './album-filter/album-filter.component';
 import { AlbumListComponent } from './album-list/album-list.component';
+import { patchState, signalState } from '@ngrx/signals';
+import { AlbumsService } from '@/albums/albums.service';
 
 @Component({
   selector: 'ngrx-album-search',
   standalone: true,
   imports: [ProgressBarComponent, AlbumFilterComponent, AlbumListComponent],
   template: `
-    <ngrx-progress-bar [showProgress]="showProgress" />
+    <ngrx-progress-bar [showProgress]="state.showProgress()" />
 
     <div class="container">
-      <h1>Albums ({{ totalAlbums }})</h1>
+      <h1>Albums ({{ totalAlbums() }})</h1>
 
       <ngrx-album-filter
-        [query]="query"
-        [order]="order"
+        [query]="state.query()"
+        [order]="state.order()"
         (queryChange)="updateQuery($event)"
         (orderChange)="updateOrder($event)"
       />
 
-      <ngrx-album-list [albums]="albums" [showSpinner]="showSpinner" />
+      <ngrx-album-list
+        [albums]="filteresAlbums()"
+        [showSpinner]="showSpinner()"
+      />
     </div>
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export default class AlbumSearchComponent {
-  readonly albums: Album[] = [
-    {
-      id: 1,
-      title: 'Album 1',
-      artist: 'Artist 1',
-      releaseDate: '2023-01-01',
-      genre: 'Genre 1',
-      coverImage: '/assets/album-covers/unplugged.jpg',
-    },
-    {
-      id: 2,
-      title: 'Album 2',
-      artist: 'Artist 2',
-      releaseDate: '2024-01-01',
-      genre: 'Genre 2',
-      coverImage: '/assets/album-covers/are-you-experienced.jpg',
-    },
-  ];
-  readonly query = '';
-  readonly order: SortOrder = 'asc';
-  readonly showSpinner = false;
-  readonly showProgress = false;
-  readonly totalAlbums = this.albums.length;
+export default class AlbumSearchComponent implements OnInit {
+  private readonly albumService = inject(AlbumsService);
 
-  updateQuery(query: string): void {}
+  state = signalState<{
+    query: string;
+    order: SortOrder;
+    showProgress: false;
+    albums: Album[];
+  }>({
+    query: '',
+    order: 'asc',
+    showProgress: false,
+    albums: [],
+  });
 
-  updateOrder(order: SortOrder): void {}
+  filteresAlbums = computed(() => {
+    return sortAlbums(
+      searchAlbums(this.state.albums(), this.state.query()),
+      this.state.order(),
+    );
+  });
+
+  totalAlbums = computed(() => {
+    return this.filteresAlbums().length;
+  });
+
+  showSpinner = computed(() => {
+    return this.state.showProgress() && this.state.albums().length === 0;
+  });
+
+  ngOnInit(): void {
+    this.albumService
+      .getAll()
+      .subscribe((albums) => patchState(this.state, { albums }));
+  }
+
+  updateQuery(query: string): void {
+    patchState(this.state, { query });
+  }
+
+  updateOrder(order: SortOrder): void {
+    patchState(this.state, { order });
+  }
 }
